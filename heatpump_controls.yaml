@@ -1,0 +1,182 @@
+# Heat Pump Control Scripts and Automations
+# For VVM S320 and F2120-8
+
+script:
+  heatpump_s320_set_heating_curve:
+    alias: "Heatpump S320 Set Heating Curve"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 26
+          value: "{{ value }}"
+    fields:
+      value:
+        description: "Heating curve value (0-15)"
+        example: 5
+
+  heatpump_s320_set_offset_curve:
+    alias: "Heatpump S320 Set Offset Curve"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 30
+          value: "{{ value }}"
+    fields:
+      value:
+        description: "Offset curve value (-10 to 10)"
+        example: 2
+
+  heatpump_s320_set_operating_mode:
+    alias: "Heatpump S320 Set Operating Mode"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 237
+          value: "{{ value }}"
+    fields:
+      value:
+        description: "Operating mode (0: auto, 1: manual, 2: add. heat only)"
+        example: 0
+
+  heatpump_s320_set_hot_water_demand:
+    alias: "Heatpump S320 Set Hot Water Demand"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 56
+          value: "{{ value }}"
+    fields:
+      value:
+        description: "Hot water demand (0: small, 1: medium, 2: large, 3: not in use, 4: smart control)"
+        example: 1
+
+  heatpump_s320_set_supply_temp_min:
+    alias: "Heatpump S320 Set Minimum Supply Temperature"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 34
+          value: "{{ value | multiply(10) | round }}"
+    fields:
+      value:
+        description: "Minimum supply temperature in °C (5-40)"
+        example: 20
+
+  heatpump_s320_set_supply_temp_max:
+    alias: "Heatpump S320 Set Maximum Supply Temperature"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 38
+          value: "{{ value | multiply(10) | round }}"
+    fields:
+      value:
+        description: "Maximum supply temperature in °C (10-80)"
+        example: 55
+
+  heatpump_s320_set_allow_additional_heat:
+    alias: "Heatpump S320 Set Allow Additional Heat"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 180
+          value: "{{ value }}"
+    fields:
+      value:
+        description: "Allow additional heat (0: off, 1: on)"
+        example: 1
+
+  heatpump_s320_set_start_temp_hw_normal:
+    alias: "Heatpump S320 Set Start Temperature for Hot Water (Normal)"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 59
+          value: "{{ value }}"
+    fields:
+      value:
+        description: "Start temperature for hot water in °C (5-70)"
+        example: 45
+
+  heatpump_s320_set_stop_temp_hw_normal:
+    alias: "Heatpump S320 Set Stop Temperature for Hot Water (Normal)"
+    sequence:
+      - service: modbus.write_register
+        data:
+          hub: VVM S320 Volund Varmepumpe
+          slave: 1
+          address: 63
+          value: "{{ value }}"
+    fields:
+      value:
+        description: "Stop temperature for hot water in °C (5-70)"
+        example: 50
+
+automation:
+  - id: heatpump_s320_seasonal_heating_curve_adjustment
+    alias: "Heatpump S320 Seasonal Heating Curve Adjustment"
+    description: "Adjusts the heating curve based on the season"
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    condition:
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ now().strftime('%m-%d') == '11-01' }}"
+          - condition: template
+            value_template: "{{ now().strftime('%m-%d') == '04-01' }}"
+          - condition: template
+            value_template: "{{ now().strftime('%m-%d') == '09-01' }}"
+          - condition: template
+            value_template: "{{ now().strftime('%m-%d') == '06-01' }}"
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ now().strftime('%m-%d') == '11-01' }}"
+            sequence:
+              - service: script.heatpump_s320_set_heating_curve
+                data:
+                  value: 5
+              - service: notify.persistent_notification
+                data:
+                  message: "Heating curve set to 5 for winter season"
+          - conditions:
+              - condition: template
+                value_template: "{{ now().strftime('%m-%d') in ['04-01', '09-01'] }}"
+            sequence:
+              - service: script.heatpump_s320_set_heating_curve
+                data:
+                  value: 4
+              - service: notify.persistent_notification
+                data:
+                  message: "Heating curve set to 4 for spring/fall season"
+          - conditions:
+              - condition: template
+                value_template: "{{ now().strftime('%m-%d') == '06-01' }}"
+            sequence:
+              - service: script.heatpump_s320_set_heating_curve
+                data:
+                  value: 3
+              - service: notify.persistent_notification
+                data:
+                  message: "Heating curve set to 3 for summer season"
+    trace:
+      stored_traces: 300
